@@ -1,192 +1,355 @@
 
 # G-DetectNet: A Homegrown HOI-GNN Pipeline
 
-**Status:** Experimental / Research Exploration
+**Status:** Experimental / Research Project
 
 ---
 
-## Overview
+## Table of Contents
 
-This repository attempts to build a **Human-Object Interaction (HOI)** detection system by combining:
-- **Feature Extraction** (via YOLOv8 for object bounding boxes, an HRNet/OpenPose placeholder for human keypoints, and a ResNet-based CNN for ROI features).
-- **Graph Neural Network** (GNN) approaches to model relationships between detected entities in the scene.
-- **Advanced Hybrid GNN Model** that merges a deep GNN branch with a CNN branch to better capture both global (graph-level) and local (convolutional) patterns.
-
-It was developed as a **personal research project** to explore new ways of fusing image-based features with graph-based relational reasoning. **Please note** that this is not a production-level codebase and is *highly experimental*.
+1. [Introduction and Motivation](#introduction-and-motivation)
+2. [Scientific and Technical Background](#scientific-and-technical-background)
+3. [Project Structure](#project-structure)
+4. [Data Preparation](#data-preparation)
+   - [Video Downloading](#video-downloading)
+   - [Frame Extraction](#frame-extraction)
+   - [CSV Annotations and Data Loader](#csv-annotations-and-data-loader)
+5. [Feature Extraction Stage](#feature-extraction-stage)
+   - [YOLOv8 for Object Detection](#yolov8-for-object-detection)
+   - [Keypoint Extraction (Placeholder)](#keypoint-extraction-placeholder)
+   - [ResNet18 for ROI Feature Extraction](#resnet18-for-roi-feature-extraction)
+6. [Graph Construction and Advanced GNN Model](#graph-construction-and-advanced-gnn-model)
+   - [Graph Nodes and Edge Formation](#graph-nodes-and-edge-formation)
+   - [Advanced Hybrid GNN Architecture](#advanced-hybrid-gnn-architecture)
+7. [Training, Validation, and Inference](#training-validation-and-inference)
+   - [Loss Functions and Optimization](#loss-functions-and-optimization)
+   - [Training Procedure](#training-procedure)
+   - [Validation and Evaluation](#validation-and-evaluation)
+   - [Real-Time Inference](#real-time-inference)
+   - [Visualization and Result Analysis](#visualization-and-result-analysis)
+8. [Known Challenges and Future Improvements](#known-challenges-and-future-improvements)
+9. [How to Run](#how-to-run)
+10. [Debugging and Logging](#debugging-and-logging)
+11. [Contributing](#contributing)
+12. [License](#license)
 
 ---
 
-## Motivation
+## 1. Introduction and Motivation
 
-The **core idea** is to:
-1. Detect humans and objects in an image (or frame).
-2. Build a graph where each detection is a node, and edges are formed between detections that are close in the image space.
-3. Run a **GNN** (with advanced architecture) to classify the types of interactions among these nodes.
+Human-Object Interaction (HOI) detection aims to determine **how humans interact with objects** in images or video frames (e.g., "holding," "riding," "cutting"). This repository presents a pipeline that combines state-of-the-art object detection, keypoint extraction, and deep feature extraction with a Graph Neural Network (GNN) to classify interactions.
 
-We want a pipeline that:
-- Takes a raw image or video frame.
-- Extracts bounding boxes and features (via YOLOv8 and a CNN).
-- Constructs a graph connecting bounding boxes based on their proximity.
-- Classifies the HOI relationships (who is interacting with what, and how).
-
-**However**, results so far show the model frequently collapses to predicting a single class for almost every sample, indicating deeper issues like:
-- **Data imbalance** in the AVA dataset (some classes are overrepresented).
-- **Over-smoothing** or insufficient feature richness.
-- **Possible mismatch** between GNN architecture and the complexities of image data.
+The project was developed as a personal research and experimentation effort. Although the current results show that the model sometimes collapses to predicting only one class (likely due to over-smoothing or class imbalance), it serves as a valuable starting point for further exploration.
 
 ---
 
-## Repository Structure
+## 2. Scientific and Technical Background
 
-```bash
-.
-├── configs/                 # YAML configs (model hyperparams, dataset paths, etc.)
-├── datasets/
-│   ├── ava_images/          # Where extracted frames from AVA videos are stored
-│   ├── ava_kinetics_v1_0/   # AVA annotation CSVs
-│   ├── ...
-│   └── ava_dataset.py       # Defines AVADataset
+- **Object Detection and Keypoint Extraction:**  
+  We use YOLOv8 for object detection and a placeholder for keypoint extraction (which can later be replaced by a real OpenPose or HRNet implementation).
+
+- **Feature Extraction with Deep CNNs:**  
+  A ResNet18 (with its final classification layer removed) converts cropped regions of interest (ROIs) into 512-dimensional feature vectors.
+
+- **Graph Neural Networks (GNNs):**  
+  GNNs enable modeling the relationships among detected entities by constructing graphs where nodes represent detections and edges capture spatial or semantic closeness. Our advanced hybrid model combines:
+  - A **deep GNN branch** (6 layers, residual connections, dropout, and layer normalization) for global relational reasoning.
+  - A **parallel CNN branch** (using 1D convolutions) that processes node features as a sequence to capture local interactions.
+  - A **fusion module** employing multi-head self-attention to blend the outputs of both branches.
+
+- **Loss Function:**  
+  We use cross-entropy loss for classification, which compares the predicted class probabilities against the true class labels.
+
+---
+
+## 3. Project Structure
+
+```
+G-DetectNet/
+├── configs/                 # YAML configuration files
+├── datasets/                # Data-related files:
+│   ├── ava_images/          # Extracted frames from videos
+│   ├── ava_kinetics_v1_0/   # AVA CSV annotations and related files
+│   ├── ...                  # Other dataset directories
 ├── models/
-│   ├── feature_extractor.py # YOLOv8 + ResNet-based feature extraction
-│   └── gnn_model.py         # AdvancedHybridHOIGNN or other GNN-based models
+│   ├── feature_extractor.py # YOLOv8, OpenPose/HRNet (placeholder), ResNet18 extraction
+│   └── gnn_model.py         # AdvancedHybridHOIGNN model architecture
 ├── utils/
-│   ├── training_utils.py    # train_one_epoch, evaluate_model, etc.
-│   ├── graph_utils.py       # construct_graph from detections
-│   └── visualization.py     # overlay bounding boxes, interactions
-├── checkpoints/             # Model weights are saved here
-├── train.py                 # Training entry script
-├── evaluate.py              # Evaluation script using real AVA data
-├── inference.py             # Real-time inference (webcam or video)
-├── visualize_random_results.py # Script to visualize predictions on random images
-├── main.py                  # CLI to load data, train, evaluate, or run inference
-└── README.md                # (This file)
+│   ├── training_utils.py    # Training and evaluation helper functions
+│   ├── graph_utils.py       # Graph construction utilities
+│   └── visualization.py     # Visualization functions for results
+├── checkpoints/             # Directory for saved model weights and loss history
+├── train.py                 # Training script (with TensorBoard and Matplotlib plotting)
+├── evaluate.py              # Evaluation script (updated to use real AVADataset)
+├── inference.py             # Real-time inference script
+├── visualize_random_results.py  # Visualize predictions on random train/val images
+├── main.py                  # CLI to switch between modes (train, evaluate, inference)
+└── README.md                # This documentation file
 ```
 
 ---
 
-## Data Structures and Flow
+## 4. Data Preparation
 
-1. **AVA Dataset**  
-   - Each row in `ava_train_v2.2.csv` or `ava_val_v2.2.csv` denotes a `(video_id, timestamp, action_id, …)`.
-   - Frames are extracted and named `videoID_timestamp.jpg`.  
-   - `AVADataset` loads each image, resizes, normalizes, and extracts a 512-dim feature using ResNet18.
+### Video Downloading
 
-2. **Feature Extraction**  
-   - **YOLOv8** for bounding boxes (object/person).
-   - **OpenPose** or **HRNet** placeholder for keypoints (currently just a dummy).
-   - **ResNet** to get a high-level embedding for each bounding box region.
+- **Script:** `datasets/download_videos.py`  
+- **Function:** Reads CSVs (e.g., `ava_train_v2.2.csv`) for YouTube video IDs and uses tools like `yt-dlp` to download videos into `datasets/ava_videos/`.
 
-3. **Graph Construction**  
-   - For each image, bounding boxes become nodes, edges formed if centroids of boxes are within some distance threshold.
+### Frame Extraction
 
-4. **GNN Forward Pass**  
-   - The advanced `AdvancedHybridHOIGNN` architecture:
-     - **Deep GNN Branch:** (6-layer SAGEConv or GATConv) with residual connections, dropout, and LayerNorm.
-     - **CNN Branch:** Treat node feature matrix as a “1D sequence” and apply 1D Convolutions for local smoothing.
-     - **Fusion:** Concatenate GNN and CNN features → multi-head self-attention → final classification layer.
+- **Script:** `datasets/extract_frames.py`  
+- **Function:** Uses OpenCV to extract frames from videos at specified timestamps and saves them as `videoID_timestamp.jpg` in `datasets/ava_images/`.
 
-5. **Training**  
-   - The pipeline calls `train_one_epoch` with cross-entropy loss.
-   - Checkpoints are saved every `config["checkpoint_interval"]` epochs in `checkpoints/`.
+### CSV Annotations and Data Loader
 
-6. **Evaluation**  
-   - The script uses the same `AVADataset` but with `ignore_availability_filter=True` to skip strict image existence checks.
-   - Reports validation loss, confusion matrix, classification report, etc.
+- **File:** `datasets/ava_dataset.py`  
+- **Function:**  
+  - Reads CSV files with annotations.
+  - Checks for the existence of corresponding images.
+  - Filters rows based on available images and allowed action classes.
+  - Maps raw action IDs to contiguous class indices.
+  - Uses ResNet18 to extract 512-dimensional features from each ROI.
 
 ---
 
-## Running the Code
+## 5. Feature Extraction Stage
 
-Here are some **sample commands** to run the pipeline (assuming you have the appropriate environment set up):
+### YOLOv8 for Object Detection
 
-1. **Install Dependencies (Example):**
+- **File:** `models/feature_extractor.py`  
+- **Function:**  
+  - Uses a pre-trained YOLOv8 model (`yolo11x.pt`) to detect bounding boxes and classify objects.
+  - Outputs bounding boxes with confidence scores and class labels.
+
+### Keypoint Extraction (Placeholder)
+
+- **File:** `models/feature_extractor.py`  
+- **Function:**  
+  - Currently a placeholder (`OpenPoseExtractor`) that returns dummy keypoints.
+  - Can be upgraded to use an actual keypoint detection model (e.g., OpenPose or HRNet).
+
+### ResNet18 for ROI Feature Extraction
+
+- **File:** `models/feature_extractor.py`  
+- **Function:**  
+  - Crops each detected ROI, resizes it to 224×224, and extracts a 512-dimensional feature vector using ResNet18.
+  - Enhanced with dropout and layer normalization to prevent overfitting and improve generalization.
+
+---
+
+## 6. Graph Construction and Advanced GNN Model
+
+### Graph Nodes and Edges
+
+- **File:** `utils/graph_utils.py`  
+- **Function:**  
+  - Each detection becomes a node.
+  - Edges are formed between nodes whose bounding box centroids are within a certain Euclidean distance threshold.
+
+### Advanced Hybrid GNN Architecture
+
+- **File:** `models/gnn_model.py`  
+- **Model:** `AdvancedHybridHOIGNN`  
+- **Architecture Overview:**
+  - **Deep GNN Branch:**  
+    - Consists of 6 layers (using GraphSAGE or GAT).
+    - Uses residual connections, dropout, and layer normalization to address over-smoothing and gradient vanishing.
+  - **Parallel CNN Branch:**  
+    - Processes node features as a 1D sequence using multiple 1D convolutional layers.
+    - Captures local interactions among nodes.
+  - **Fusion Module:**  
+    - Concatenates outputs from both branches.
+    - Applies multi-head self-attention to blend features.
+    - A final linear projection produces the output logits.
+  - **Justification:**  
+    This fusion of global (GNN) and local (CNN) features aims to capture both the holistic relationships in the scene and fine-grained details—essential for robust HOI detection.
+
+---
+
+## 7. Training, Validation, and Inference
+
+### Loss Functions and Optimization
+
+- **Loss:** Cross-Entropy Loss for classification.
+- **Optimizer:** AdamW.
+- **Learning Rate Scheduler:** StepLR (steps every 5 epochs).
+
+### Training Procedure
+
+- Uses `train.py` to run training:
+  - Loads training and validation datasets using `AVADataset`.
+  - Performs forward passes through the Advanced Hybrid GNN model.
+  - Logs loss values using TensorBoard and enhanced Matplotlib plots.
+  - Saves checkpoints and loss history (combined with previous runs).
+
+### Validation Procedure
+
+- Uses `evaluate.py` (now updated to use the real AVADataset) to compute loss, confusion matrix, and classification metrics.
+
+### Real-Time Inference
+
+- Uses `inference.py` for real-time (webcam) or offline video inference.
+- Visualizes bounding boxes and predicted interactions overlaid on frames.
+
+### Visualization and Result Analysis
+
+- **TensorBoard:**  
+  Launch using:
+  ```bash
+  tensorboard --logdir=runs
+  ```
+  This displays live logging of training and validation loss.
+- **Matplotlib Plots:**  
+  The training script saves professional loss curves (including previous runs) in the `checkpoints/` folder.  
+- **Random Image Visualization:**  
+  Run `python visualize_random_results.py` to see predictions on 8 random images from the training set and 8 from the validation set arranged in a 4×4 grid.
+
+---
+
+## 8. Known Challenges and Future Improvements
+
+### Current Issues
+
+- **Constant Validation Loss & Class Collapse:**  
+  The model sometimes collapses to predicting only one class (e.g., class 6). This results in a nearly constant validation loss.  
+  Possible reasons include:
+  - **Severe Class Imbalance:** Majority classes dominate training.
+  - **Over-Smoothing:** Even with residuals and dropout, the GNN branch might still over-smooth, causing loss of discriminative features.
+  - **Insufficient Feature Discrimination:** Bounding box–based features might not be rich enough to capture complex interactions.
+
+### Future Improvements
+
+- **Enhanced Loss Functions:**  
+  Implement weighted cross-entropy or focal loss to handle class imbalance.
+- **Data Augmentation and Sampling Strategies:**  
+  Improve training by augmenting images and balancing mini-batches.
+- **Advanced Keypoint Integration:**  
+  Replace the dummy keypoint extractor with a state-of-the-art method (e.g., OpenPose or HRNet).
+- **GNN Architecture Tweaks:**  
+  Experiment with other architectures (Graph Transformers, more attention layers) to better handle high-dimensional visual features.
+- **Fusion Module Enhancements:**  
+  Further refine the multi-head self-attention mechanism to better blend global and local features.
+
+---
+
+## 9. How to Run
+
+### Environment Setup
+
+1. **Create/Activate Conda Environment:**
    ```bash
    conda create -n gdetectnet python=3.9
    conda activate gdetectnet
-   pip install -r requirements.txt
-   # Make sure to install PyTorch Geometric, YOLOv8, etc.
+   ```
+2. **Install Dependencies:**
+   ```bash
+   conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
+   pip install torch-geometric ultralytics opencv-python pillow pandas matplotlib seaborn
    ```
 
-2. **Train the Model:**
-   ```bash
-   python main.py --mode train --config configs/config.yaml
-   ```
-   - This uses `train.py` behind the scenes, reading hyperparams from `configs/config.yaml`.
+### Commands
 
-3. **Evaluate on Validation Set:**
-   ```bash
-   python main.py --mode evaluate --config configs/config.yaml
-   ```
-   - Or directly:
-   ```bash
-   python evaluate.py
-   ```
-
-4. **Run Real-Time Inference with Webcam:**
-   ```bash
-   python main.py --mode inference --config configs/config.yaml
-   ```
-   - Or directly:
-   ```bash
-   python inference.py
-   ```
-
-5. **Visualize TensorBoard Logs:**
-   ```bash
-   tensorboard --logdir=runs
-   ```
-
-6. **Visualize Random Results on Train/Val Images:**
-   ```bash
-   python visualize_random_results.py
-   ```
+- **Download Videos (if needed):**
+  ```bash
+  python datasets/download_videos.py
+  ```
+- **Extract Frames:**
+  ```bash
+  python datasets/extract_frames.py
+  ```
+- **Train the Model:**
+  ```bash
+  python main.py --mode train --config configs/config.yaml
+  ```
+- **Evaluate the Model:**
+  ```bash
+  python main.py --mode evaluate --config configs/config.yaml
+  ```
+  or directly:
+  ```bash
+  python evaluate.py
+  ```
+- **Real-Time Inference:**
+  ```bash
+  python main.py --mode inference --config configs/config.yaml
+  ```
+  or directly:
+  ```bash
+  python inference.py
+  ```
+- **Visualize Random Results:**
+  ```bash
+  python visualize_random_results.py
+  ```
+- **Launch TensorBoard:**
+  ```bash
+  tensorboard --logdir=runs
+  ```
 
 ---
 
-## Current Challenges
+## 10. Debugging and Logging
 
-1. **Class Collapse**  
-   The model (both the simpler GNN and the advanced `AdvancedHybridHOIGNN`) often converges to predicting a single class (e.g., class 6). The confusion matrix shows nearly all samples are predicted as that class, which yields a nearly constant validation loss.
-
-2. **Potential Reasons**  
-   - **Severe Class Imbalance**: The AVA dataset can be skewed, leading the model to prefer majority classes.  
-   - **Over-Smoothing**: GNNs can struggle with deep architectures on image-based data. Even with residuals, advanced techniques, the final output overfits.  
-   - **Hyperparameter Mismatch**: Possibly suboptimal learning rate, dropout, or weight decay.  
-   - **Insufficient Negative Samples** or incorrectly filtered dataset rows.  
-
-3. **Model Complexity vs. Data**  
-   - The advanced GNN approach might require even more data or more specialized graph construction to capture the complexities of HOI.  
-   - The CNN + GNN fusion architecture is large but may still fail if the bounding box-level features do not discriminate the interactions well.
+- **Logging:**  
+  All training logs are saved to `training.log` and printed to the console.
+- **Matplotlib Loss History:**  
+  Loss curves (including previous run data) are saved as PNG files in the `checkpoints/` folder.
+- **Common Issues:**  
+  - Mismatches between CSV annotations and available images.
+  - Warnings regarding deprecated functions or missing dependencies (e.g., torch-scatter, torch-sparse).  
+  If you encounter such warnings, ensure that you have installed the latest versions of these packages and check for compatibility issues.
 
 ---
 
-## Future Directions
+## 11. Contributing
 
-- **Address Imbalance**  
-  - Weighted cross-entropy or focal loss.  
-  - Balanced sampling in mini-batches.
+This project is a **home research experiment**. We welcome contributions that help:
+- Improve the GNN architecture (e.g., advanced fusion techniques, better handling of over-smoothing).
+- Enhance feature extraction (e.g., replace dummy keypoint extraction with a real model).
+- Tackle class imbalance and add new loss functions.
+- Optimize data loading and graph construction methods.
 
-- **Further Architecture Tweaks**  
-  - Experiment with GAT + different attention heads, or other GNN variants (like Graph Transformer networks).  
-  - Tuning the multi-head self-attention fusion to better merge GNN and CNN branches.
-
-- **Better Keypoint Integration**  
-  - Right now, keypoints are placeholders. Incorporating real pose estimates might help the model differentiate actions more robustly.
-
-- **Stronger Regularization or Data Augmentation**  
-  - Could mitigate overfitting to a single class.
-
-- **Community Contributions**  
-  - If you have better ideas on fusing image features with GNN-based relational reasoning, we would **love** your help!
+If you have ideas, please feel free to open an issue or submit a pull request.
 
 ---
 
-## Conclusion & Disclaimer
+## 12. Conclusion and Future Work
 
-This project is a **home research experiment** aimed at exploring advanced HOI detection with GNNs. **It is not production-ready** and still faces significant performance issues, notably collapsing to a single predicted class. It’s possible that GNN-based HOI detection with purely bounding-box-level features is not sufficient or requires more complex architectures and significant engineering.
+G-DetectNet represents an exploratory effort to fuse advanced deep learning techniques with graph-based reasoning for HOI detection. While the current model has challenges—most notably, collapsing to a single class during validation—the project has laid the groundwork for:
 
-We hope the code might serve as a **starting point** for others to investigate new ways of combining image-based detection with graph-based reasoning. If you have any suggestions or if you’d like to contribute solutions (especially around data imbalance, advanced fusion modules, or improved bounding box detection pipelines), please **open an Issue or Pull Request**. We would be happy to collaborate and learn from your insights.
+- **Advanced Hybrid Architectures:** Combining a deep GNN branch with a parallel CNN branch using multi-head self-attention.
+- **Enhanced Data Processing:** Improved filtering and feature extraction techniques.
+- **Extensibility:** A modular design that allows for easy integration of new models and techniques.
 
-**Thank you** for your interest in G-DetectNet!
+Future work will focus on addressing class imbalance, refining the fusion mechanism, and incorporating more robust keypoint detection. If you have insights or improvements, your contributions will be highly appreciated.
 
 ---
+
+## 13. License
+
+This repository is released under the **MIT License**. See the `LICENSE` file for more details.
+
+---
+
+*Thank you for checking out G-DetectNet! If you have any questions or suggestions, please open an issue. We are eager to collaborate and improve this research project further.*
+```
+
+### How to Run the Updated Scripts with the New Model
+
+The new GNN model is now called `AdvancedHybridHOIGNN`. In your `visualize_random_results.py` (and anywhere else using the model) make sure to import it as follows:
+
+```python
+from models.gnn_model import AdvancedHybridHOIGNN
+```
+
+Then run the script as usual:
+```bash
+python visualize_random_results.py
+```
+
+For training and evaluation, you can run:
+```bash
+python main.py --mode train --config configs/config.yaml
+python main.py --mode evaluate --config configs/config.yaml
+```
