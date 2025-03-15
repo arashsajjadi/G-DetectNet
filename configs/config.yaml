@@ -1,0 +1,15 @@
+# General Training Config
+batch_size: 32
+num_epochs: 80
+learning_rate: 0.0001       # Learning rate for AdamW optimizer
+weight_decay: 0.01          # L2 regularization strength
+lr_warmup_steps: 500        # (Optional) Warm-up steps before steady learning rate
+checkpoint_interval: 1      # Save checkpoints every N epochs
+gpu: true
+mixed_precision: true       # Enables AMP (Automatic Mixed Precision)
+
+# Model Configuration
+model:
+  gnn_type: "GraphSAGE"     # Options: "GraphSAGE" or "GAT"
+  num_layers: 5             # Recommended: 5 or 6 for deeper GNNs
+  hidden_dim: 384           # Increased model capacity (try 256 or 384)
