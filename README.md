@@ -353,3 +353,14 @@ For training and evaluation, you can run:
 python main.py --mode train --config configs/config.yaml
 python main.py --mode evaluate --config configs/config.yaml
 ```
+
+---
+
+## Author
+
+**Arash Sajjadi**
+
+Thank you for exploring **G-DetectNet**! If you have any questions, suggestions, or contributions, feel free to open an issue or submit a pull request. Let's continue improving this research project together!
+
+---
+
