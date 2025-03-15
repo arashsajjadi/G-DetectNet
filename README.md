@@ -15,7 +15,7 @@
    - [Frame Extraction](#frame-extraction)
    - [CSV Annotations and Data Loader](#csv-annotations-and-data-loader)
 5. [Feature Extraction Stage](#feature-extraction-stage)
-   - [YOLOv8 for Object Detection](#yolov8-for-object-detection)
+   - [YOLOv11 for Object Detection](#YOLOv11-for-object-detection)
    - [Keypoint Extraction (Placeholder)](#keypoint-extraction-placeholder)
    - [ResNet18 for ROI Feature Extraction](#resnet18-for-roi-feature-extraction)
 6. [Graph Construction and Advanced GNN Model](#graph-construction-and-advanced-gnn-model)
@@ -46,7 +46,7 @@ The project was developed as a personal research and experimentation effort. Alt
 ## 2. Scientific and Technical Background
 
 - **Object Detection and Keypoint Extraction:**  
-  We use YOLOv8 for object detection and a placeholder for keypoint extraction (which can later be replaced by a real OpenPose or HRNet implementation).
+  I used YOLOv11 for object detection and a placeholder for keypoint extraction (which can later be replaced by a real OpenPose or HRNet implementation).
 
 - **Feature Extraction with Deep CNNs:**  
   A ResNet18 (with its final classification layer removed) converts cropped regions of interest (ROIs) into 512-dimensional feature vectors.
@@ -58,7 +58,7 @@ The project was developed as a personal research and experimentation effort. Alt
   - A **fusion module** employing multi-head self-attention to blend the outputs of both branches.
 
 - **Loss Function:**  
-  We use cross-entropy loss for classification, which compares the predicted class probabilities against the true class labels.
+  I used cross-entropy loss for classification, which compares the predicted class probabilities against the true class labels.
 
 ---
 
@@ -72,7 +72,7 @@ G-DetectNet/
 │   ├── ava_kinetics_v1_0/   # AVA CSV annotations and related files
 │   ├── ...                  # Other dataset directories
 ├── models/
-│   ├── feature_extractor.py # YOLOv8, OpenPose/HRNet (placeholder), ResNet18 extraction
+│   ├── feature_extractor.py # YOLOv11, OpenPose/HRNet (placeholder), ResNet18 extraction
 │   └── gnn_model.py         # AdvancedHybridHOIGNN model architecture
 ├── utils/
 │   ├── training_utils.py    # Training and evaluation helper functions
@@ -115,11 +115,11 @@ G-DetectNet/
 
 ## 5. Feature Extraction Stage
 
-### YOLOv8 for Object Detection
+### YOLOv11 for Object Detection
 
 - **File:** `models/feature_extractor.py`  
 - **Function:**  
-  - Uses a pre-trained YOLOv8 model (`yolo11x.pt`) to detect bounding boxes and classify objects.
+  - Uses a pre-trained YOLOv11 model (`yolo11x.pt`) to detect bounding boxes and classify objects.
   - Outputs bounding boxes with confidence scores and class labels.
 
 ### Keypoint Extraction (Placeholder)
@@ -304,7 +304,7 @@ G-DetectNet/
 
 ## 11. Contributing
 
-This project is a **home research experiment**. We welcome contributions that help:
+This project is a **home research experiment**. I welcome contributions that help:
 - Improve the GNN architecture (e.g., advanced fusion techniques, better handling of over-smoothing).
 - Enhance feature extraction (e.g., replace dummy keypoint extraction with a real model).
 - Tackle class imbalance and add new loss functions.
@@ -332,7 +332,7 @@ This repository is released under the **MIT License**. See the `LICENSE` file fo
 
 ---
 
-*Thank you for checking out G-DetectNet! If you have any questions or suggestions, please open an issue. We are eager to collaborate and improve this research project further.*
+*Thank you for checking out G-DetectNet! If you have any questions or suggestions, please open an issue. I am eager to collaborate and improve this research project further.*
 ```
 
 ### How to Run the Updated Scripts with the New Model
