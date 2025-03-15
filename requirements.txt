@@ -1,0 +1,10 @@
+torch>=1.10.0
+torchvision
+torch-geometric
+pyyaml
+opencv-python
+numpy
+scikit-learn
+tensorboard
+ultralytics
+torchmetrics
